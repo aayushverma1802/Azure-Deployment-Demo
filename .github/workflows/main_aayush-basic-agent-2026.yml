@@ -46,4 +46,3 @@ jobs:
           app-name: 'aayush-basic-agent-2026'
           slot-name: 'Production'
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_8FF76B8DD8FD42EF93899CAF02CD31CB }}
-          startup-command: 'python -m uvicorn app:app --host 0.0.0.0 --port 8000'
