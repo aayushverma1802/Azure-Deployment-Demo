@@ -1,12 +1,19 @@
 import os
+import sys
 import json
 import uuid
+from pathlib import Path
+
+_wwwroot = Path(__file__).resolve().parent
+for _candidate in [_wwwroot / ".python_packages" / "lib" / "site-packages", *_wwwroot.glob("antenv/lib/python*/site-packages")]:
+    if _candidate.is_dir():
+        sys.path.insert(0, str(_candidate))
+
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse, HTMLResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Any
-from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 
 app = FastAPI(title="Agentic Travel Planner")
 
@@ -71,10 +78,39 @@ def read_js():
 def health_check():
     return {"status": "healthy", "service": "travel-agent-mcp"}
 
+def extract_text(content) -> str:
+    if not content:
+        return ""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict):
+                if block.get("type") == "text":
+                    parts.append(block.get("text") or "")
+                elif "text" in block:
+                    parts.append(str(block.get("text") or ""))
+            else:
+                text = getattr(block, "text", None)
+                if text:
+                    parts.append(text)
+        return "".join(parts)
+    return str(content)
+
+
+def sse(payload: dict) -> str:
+    return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
 @app.post("/api/chat/stream")
 async def chat_stream_endpoint(req: ChatRequest):
     if not req.message.strip():
         raise HTTPException(status_code=400, detail="Message cannot be empty")
+
+    from langchain_core.messages import HumanMessage
 
     thread_id = req.thread_id or str(uuid.uuid4())
     config = {"configurable": {"thread_id": thread_id}}
@@ -82,34 +118,52 @@ async def chat_stream_endpoint(req: ChatRequest):
     agent_instance = get_agent()
 
     async def event_generator():
-        yield f"data: {json.dumps({'type': 'init', 'thread_id': thread_id})}\n\n"
+        yield sse({"type": "init", "thread_id": thread_id})
+        started_tools = set()
         try:
-            async for event in agent_instance.astream_events(inputs, config=config, version="v2"):
-                kind = event.get("event")
-                if kind == "on_chat_model_stream":
-                    chunk = event["data"]["chunk"]
-                    if hasattr(chunk, "content") and isinstance(chunk.content, str) and chunk.content:
-                        yield f"data: {json.dumps({'type': 'token', 'content': chunk.content})}\n\n"
-                elif kind == "on_tool_start":
-                    tool_name = event.get("name")
-                    tool_input = event.get("data", {}).get("input")
-                    yield f"data: {json.dumps({'type': 'tool_start', 'tool': tool_name, 'input': tool_input})}\n\n"
-                elif kind == "on_tool_end":
-                    tool_name = event.get("name")
-                    tool_output = str(event.get("data", {}).get("output", ""))
-                    yield f"data: {json.dumps({'type': 'tool_end', 'tool': tool_name, 'output': tool_output})}\n\n"
-            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+            async for item in agent_instance.astream(
+                inputs,
+                config=config,
+                stream_mode=["messages", "updates"],
+            ):
+                mode, chunk = item if isinstance(item, tuple) and len(item) == 2 else ("messages", item)
+
+                if mode == "messages":
+                    msg, meta = chunk if isinstance(chunk, tuple) else (chunk, {})
+                    node = (meta or {}).get("langgraph_node", "")
+                    if node and node not in ("agent", "model"):
+                        continue
+
+                    for tc in getattr(msg, "tool_call_chunks", None) or []:
+                        name = tc.get("name") if isinstance(tc, dict) else getattr(tc, "name", None)
+                        if name and name not in started_tools:
+                            started_tools.add(name)
+                            yield sse({"type": "tool_start", "tool": name})
+
+                    text = extract_text(getattr(msg, "content", ""))
+                    if text:
+                        yield sse({"type": "token", "content": text})
+
+                elif mode == "updates" and isinstance(chunk, dict) and "tools" in chunk:
+                    update = chunk.get("tools") or {}
+                    messages = update.get("messages") if isinstance(update, dict) else []
+                    for tm in messages or []:
+                        name = getattr(tm, "name", None) or "tool"
+                        yield sse({"type": "tool_end", "tool": name})
+
+            yield sse({"type": "done"})
         except Exception as e:
-            yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
+            yield sse({"type": "error", "error": str(e)})
 
     return StreamingResponse(
         event_generator(),
         media_type="text/event-stream",
         headers={
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-transform",
             "Connection": "keep-alive",
-            "X-Accel-Buffering": "no"
-        }
+            "X-Accel-Buffering": "no",
+            "Content-Type": "text/event-stream; charset=utf-8",
+        },
     )
 
 @app.post("/api/chat", response_model=ChatResponse)
@@ -117,6 +171,8 @@ async def chat_endpoint(req: ChatRequest):
     if not req.message.strip():
         raise HTTPException(status_code=400, detail="Message cannot be empty")
     
+    from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
+
     thread_id = req.thread_id or str(uuid.uuid4())
     config = {"configurable": {"thread_id": thread_id}}
     agent_instance = get_agent()

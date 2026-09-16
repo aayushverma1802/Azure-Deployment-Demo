@@ -2,17 +2,19 @@
 <html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#2563eb" />
   <title>TravelAI - Agentic Travel Planner</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css" />
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
+  <div class="sidebar-overlay" id="sidebar-overlay" hidden></div>
   <div class="layout">
-    <aside class="sidebar">
+    <aside class="sidebar" id="sidebar">
       <div class="brand-container">
         <div class="brand-icon">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -23,6 +25,9 @@
           <h1 class="brand-title">TravelAI</h1>
           <p class="brand-tagline">MCP & LangGraph Agent</p>
         </div>
+        <button class="icon-btn close-sidebar" id="close-sidebar" aria-label="Close menu">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
       </div>
 
       <div class="sidebar-section">
@@ -84,11 +89,17 @@
 
     <main class="main-content">
       <header class="top-nav">
-        <div class="connection-status">
-          <span class="status-indicator-dot"></span>
-          <span class="status-text">Azure Agent Online</span>
+        <div class="nav-left">
+          <button class="icon-btn menu-btn" id="menu-btn" aria-label="Open menu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+          </button>
+          <div class="connection-status">
+            <span class="status-indicator-dot"></span>
+            <span class="status-text">Azure Agent Online</span>
+          </div>
         </div>
         <div class="nav-actions">
+          <button class="action-btn compact" onclick="clearConversation()" aria-label="New itinerary">New</button>
           <button id="theme-toggle" class="theme-btn" onclick="toggleTheme()" aria-label="Toggle Theme">
             <svg id="theme-icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="5"></circle>
@@ -112,29 +123,29 @@
           <p class="hero-subtitle">Ask for full itineraries, real-time weather forecasts, budgeting, and curated attractions powered by live agent tools.</p>
           
           <div class="cards-grid">
-            <div class="prompt-card" onclick="applySuggestion('Plan a 4-day trip to Tokyo with live weather forecast, top sights, and estimated budget for 2 people.')">
+            <button type="button" class="prompt-card" onclick="applySuggestion('Plan a 4-day trip to Tokyo with live weather forecast, top sights, and estimated budget for 2 people.')">
               <div class="card-header">
                 <span class="card-tag">Full Plan</span>
               </div>
               <h3 class="card-title">Tokyo 4-Day Journey</h3>
               <p class="card-desc">Complete itinerary with live weather and budget breakdown.</p>
-            </div>
+            </button>
 
-            <div class="prompt-card" onclick="applySuggestion('Give me a 3-day budget itinerary for Paris with current weather and estimated accommodation costs.')">
+            <button type="button" class="prompt-card" onclick="applySuggestion('Give me a 3-day budget itinerary for Paris with current weather and estimated accommodation costs.')">
               <div class="card-header">
                 <span class="card-tag">Budget Guide</span>
               </div>
               <h3 class="card-title">Paris on a Budget</h3>
               <p class="card-desc">Cost-effective guide with daily weather and dining tips.</p>
-            </div>
+            </button>
 
-            <div class="prompt-card" onclick="applySuggestion('Create a luxury weekend itinerary for Dubai including weather forecast and exclusive attractions.')">
+            <button type="button" class="prompt-card" onclick="applySuggestion('Create a luxury weekend itinerary for Dubai including weather forecast and exclusive attractions.')">
               <div class="card-header">
                 <span class="card-tag">Luxury Stay</span>
               </div>
               <h3 class="card-title">Dubai Luxury Weekend</h3>
               <p class="card-desc">High-end experiences, desert safari, and live weather.</p>
-            </div>
+            </button>
           </div>
         </div>
       </div>
@@ -143,7 +154,7 @@
         <form id="chat-form" class="chat-form" onsubmit="handleSend(event)">
           <textarea
             id="user-input"
-            placeholder="Type your destination or travel question (e.g. Plan a 5-day trip to Rome for 2 people)..."
+            placeholder="Ask for an itinerary, weather, or budget..."
             rows="1"
             onkeydown="handleKeyDown(event)"
           ></textarea>

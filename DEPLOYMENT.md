@@ -42,11 +42,11 @@ az webapp create \
 
 ### Step 3: Configure Startup Command and Environment Variables
 ```bash
-# Set Startup Command
+# FastAPI is ASGI. Azure's default Gunicorn worker is WSGI and returns Internal Server Error.
 az webapp config set \
   --resource-group agent-demo-rg \
   --name travel-agent-mcp-demo \
-  --startup-file "uvicorn app:app --host 0.0.0.0 --port 8000"
+  --startup-file "gunicorn --worker-class uvicorn.workers.UvicornWorker --bind=0.0.0.0:8000 --workers 1 --timeout 600 app:app"
 
 # Set App Settings (.env variables)
 az webapp config appsettings set \

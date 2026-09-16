@@ -26,17 +26,22 @@ def budget_calculator_tool(destination: str, days: int, travelers: int, travel_s
 
 tools = [search_web_travel_tool, weather_forecast_tool, budget_calculator_tool]
 
-endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-api_key = os.getenv("AZURE_OPENAI_KEY")
-deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o")
-api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview")
+endpoint = (os.getenv("AZURE_OPENAI_ENDPOINT") or "").strip()
+api_key = (os.getenv("AZURE_OPENAI_KEY") or os.getenv("AZURE_OPENAI_API_KEY") or "").strip()
+deployment_name = (os.getenv("AZURE_OPENAI_DEPLOYMENT") or os.getenv("AZURE_OPENAI_CHAT_DEPLOYMENT_NAME") or "gpt-4o").strip()
+api_version = (os.getenv("AZURE_OPENAI_API_VERSION") or "2024-02-15-preview").strip()
+
+if api_key:
+    os.environ["AZURE_OPENAI_API_KEY"] = api_key
 
 llm = AzureChatOpenAI(
     azure_endpoint=endpoint,
     api_key=api_key,
     azure_deployment=deployment_name,
+    model=deployment_name,
     api_version=api_version,
-    temperature=0.7
+    temperature=0.7,
+    streaming=True,
 )
 
 system_prompt = (
