@@ -20,14 +20,26 @@ jobs:
 
       - name: Install dependencies into Azure package directory
         run: |
+          pip install --upgrade pip
           pip install --target=".python_packages/lib/site-packages" -r requirements.txt
+          python -c "import os; p='.python_packages/lib/site-packages'; print('packages_dir_exists', os.path.isdir(p)); print('entry_count', len(os.listdir(p)) if os.path.isdir(p) else 0)"
 
       - name: Upload artifact for deployment jobs
         uses: actions/upload-artifact@v4
         with:
           name: python-app
+          include-hidden-files: true
           path: |
-            .
+            app.py
+            agent.py
+            wsgi.py
+            mcp_server.py
+            requirements.txt
+            gunicorn.conf.py
+            startup.txt
+            startup.sh
+            static
+            .python_packages
 
   deploy:
     runs-on: ubuntu-latest
@@ -46,4 +58,3 @@ jobs:
           app-name: 'ggk'
           slot-name: 'Production'
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_C4BF2FC6C23C4B99A34A9ADD224F1104 }}
-          startup-command: "PYTHONPATH=/home/site/wwwroot/.python_packages/lib/site-packages gunicorn --worker-class uvicorn.workers.UvicornWorker --bind=0.0.0.0:8000 --workers 1 --timeout 600 --access-logfile - --error-logfile - app:app"
