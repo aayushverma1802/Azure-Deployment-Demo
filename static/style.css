@@ -427,6 +427,7 @@ body {
   border: 1px solid var(--border-subtle);
   color: var(--text-main);
   border-bottom-left-radius: 4px;
+  contain: content;
 }
 
 .message.bot .message-bubble h1,

@@ -93,16 +93,40 @@ function escapeHtml(text) {
     .replace(/>/g, "&gt;");
 }
 
-function renderStreaming(bubble, text) {
-  bubble.innerHTML = `${escapeHtml(text).replace(/\n/g, "<br>")}<span class="stream-caret"></span>`;
+function closeOpenMarkdown(src) {
+  let text = src;
+  const fences = text.match(/```/g);
+  if (fences && fences.length % 2 === 1) {
+    return text + "\n```";
+  }
+
+  if (((text.match(/`/g) || []).length) % 2 === 1) text += "`";
+  if (text.split("**").length % 2 === 0) text += "**";
+
+  const leftoverStars = (text.replace(/\*\*/g, "").match(/\*/g) || []).length;
+  if (leftoverStars % 2 === 1) text += "*";
+
+  if (text.split("__").length % 2 === 0) text += "__";
+  const leftoverUnderscores = (text.replace(/__/g, "").match(/_/g) || []).length;
+  if (leftoverUnderscores % 2 === 1) text += "_";
+
+  if ((text.match(/\[/g) || []).length > (text.match(/\]/g) || []).length) text += "]";
+  if (/\[[^\]]*\]\([^)]*$/.test(text)) text += ")";
+
+  return text;
 }
 
-function renderMarkdown(bubble, text) {
-  if (typeof marked !== "undefined") {
-    bubble.innerHTML = marked.parse(text);
-  } else {
-    bubble.textContent = text;
-  }
+function renderMarkdown(target, text, { caret = false, stabilize = false } = {}) {
+  const source = stabilize ? closeOpenMarkdown(text) : text;
+  const html = typeof marked !== "undefined" ? marked.parse(source) : escapeHtml(source).replace(/\n/g, "<br>");
+  target.innerHTML = caret ? `${html}<span class="stream-caret"></span>` : html;
+}
+
+function charsThisFrame(buffered) {
+  if (buffered > 120) return Math.ceil(buffered / 6);
+  if (buffered > 40) return 8;
+  if (buffered > 12) return 4;
+  return Math.max(1, buffered);
 }
 
 async function handleSend(event) {
@@ -123,26 +147,39 @@ async function handleSend(event) {
 
   const { toolsDiv, bubble } = createBotMessageStreamContainer();
   const toolBadges = new Map();
-  let fullText = "";
-  let pending = "";
+  let rawText = "";
+  let shownLen = 0;
   let rafId = 0;
+  let live = true;
+  let lastPainted = "";
 
-  const flush = (force) => {
-    if (!pending && !force) return;
-    fullText += pending;
-    pending = "";
-    renderStreaming(bubble, fullText);
+  const paint = (done = false) => {
+    const visible = rawText.slice(0, shownLen);
+    if (visible === lastPainted && !done) return;
+    lastPainted = visible;
+    if (visible) {
+      renderMarkdown(bubble, visible, { caret: !done, stabilize: !done });
+    }
     scrollIfNeeded();
   };
 
-  const queueToken = (chunk) => {
-    pending += chunk;
-    if (!rafId) {
-      rafId = requestAnimationFrame(() => {
-        rafId = 0;
-        flush();
-      });
+  const pump = () => {
+    rafId = requestAnimationFrame(pump);
+    if (shownLen < rawText.length) {
+      shownLen += charsThisFrame(rawText.length - shownLen);
+      if (shownLen > rawText.length) shownLen = rawText.length;
+      paint(false);
+    } else if (!live) {
+      cancelAnimationFrame(rafId);
+      rafId = 0;
+      shownLen = rawText.length;
+      paint(true);
     }
+  };
+
+  const queueToken = (chunk) => {
+    rawText += chunk;
+    if (!rafId) rafId = requestAnimationFrame(pump);
   };
 
   try {
@@ -201,20 +238,29 @@ async function handleSend(event) {
         } else if (payload.type === "token") {
           queueToken(payload.content || "");
         } else if (payload.type === "error") {
-          flush(true);
-          fullText += `${fullText ? "\n\n" : ""}Error: ${payload.error}`;
-          bubble.textContent = fullText;
+          rawText += `${rawText ? "\n\n" : ""}Error: ${payload.error}`;
+          shownLen = rawText.length;
+          live = false;
         } else if (payload.type === "done") {
-          flush(true);
+          live = false;
         }
       }
     }
 
-    if (rafId) cancelAnimationFrame(rafId);
-    flush(true);
-    if (fullText) renderMarkdown(bubble, fullText);
-    else if (!bubble.textContent) bubble.textContent = "No response generated. Try again.";
+    live = false;
+    if (!rawText) {
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = 0;
+      bubble.textContent = "No response generated. Try again.";
+    } else if (shownLen >= rawText.length) {
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = 0;
+      renderMarkdown(bubble, rawText, { caret: false, stabilize: false });
+    } else if (!rafId) {
+      rafId = requestAnimationFrame(pump);
+    }
   } catch (error) {
+    if (rafId) cancelAnimationFrame(rafId);
     bubble.textContent = `An error occurred: ${error.message}`;
   } finally {
     sending = false;
