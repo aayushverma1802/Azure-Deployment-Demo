@@ -160,6 +160,14 @@ async def chat_endpoint(req: ChatRequest):
 if os.path.exists(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
+try:
+    from a2wsgi import ASGIMiddleware
+    wsgi_app = ASGIMiddleware(app)
+    application = wsgi_app
+except Exception:
+    wsgi_app = app
+    application = app
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
