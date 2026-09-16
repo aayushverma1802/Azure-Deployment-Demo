@@ -2,7 +2,7 @@ import os
 import json
 import uuid
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -41,6 +41,29 @@ class ChatResponse(BaseModel):
     thread_id: str
     response: str
     tools_used: List[ToolExecution]
+
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+
+@app.get("/")
+async def read_index():
+    index_path = os.path.join(static_dir, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    return {"message": "Agentic Travel Planner API is running"}
+
+@app.get("/style.css")
+async def read_css():
+    css_path = os.path.join(static_dir, "style.css")
+    if os.path.exists(css_path):
+        return FileResponse(css_path, media_type="text/css")
+    raise HTTPException(status_code=404, detail="CSS not found")
+
+@app.get("/app.js")
+async def read_js():
+    js_path = os.path.join(static_dir, "app.js")
+    if os.path.exists(js_path):
+        return FileResponse(js_path, media_type="application/javascript")
+    raise HTTPException(status_code=404, detail="JS not found")
 
 @app.get("/api/health")
 def health_check():
@@ -134,9 +157,8 @@ async def chat_endpoint(req: ChatRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-static_dir = os.path.join(os.path.dirname(__file__), "static")
 if os.path.exists(static_dir):
-    app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 if __name__ == "__main__":
     import uvicorn
