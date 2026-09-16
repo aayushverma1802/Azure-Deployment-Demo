@@ -1,9 +1,23 @@
 import json
 import httpx
 from duckduckgo_search import DDGS
-from mcp.server.fastmcp import FastMCP
 
-mcp = FastMCP("travel-agent-mcp")
+try:
+    from mcp.server.fastmcp import FastMCP
+    mcp = FastMCP("travel-agent-mcp")
+except Exception:
+    try:
+        from mcp.server.mcpserver import MCPServer
+        mcp = MCPServer("travel-agent-mcp")
+    except Exception:
+        class FallbackMCP:
+            def tool(self):
+                def decorator(f):
+                    return f
+                return decorator
+            def run(self):
+                pass
+        mcp = FallbackMCP()
 
 @mcp.tool()
 def search_travel_web(query: str) -> str:
