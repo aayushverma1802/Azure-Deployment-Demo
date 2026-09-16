@@ -2,8 +2,7 @@ import os
 import json
 import uuid
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import StreamingResponse, FileResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import StreamingResponse, HTMLResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Any
@@ -44,25 +43,28 @@ class ChatResponse(BaseModel):
 
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 
-@app.get("/")
-async def read_index():
+@app.get("/", response_class=HTMLResponse)
+def read_index():
     index_path = os.path.join(static_dir, "index.html")
     if os.path.exists(index_path):
-        return FileResponse(index_path)
-    return {"message": "Agentic Travel Planner API is running"}
+        with open(index_path, "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+    return HTMLResponse(content="<h1>Agentic Travel Planner is Running</h1>")
 
 @app.get("/style.css")
-async def read_css():
+def read_css():
     css_path = os.path.join(static_dir, "style.css")
     if os.path.exists(css_path):
-        return FileResponse(css_path, media_type="text/css")
+        with open(css_path, "r", encoding="utf-8") as f:
+            return Response(content=f.read(), media_type="text/css")
     raise HTTPException(status_code=404, detail="CSS not found")
 
 @app.get("/app.js")
-async def read_js():
+def read_js():
     js_path = os.path.join(static_dir, "app.js")
     if os.path.exists(js_path):
-        return FileResponse(js_path, media_type="application/javascript")
+        with open(js_path, "r", encoding="utf-8") as f:
+            return Response(content=f.read(), media_type="application/javascript")
     raise HTTPException(status_code=404, detail="JS not found")
 
 @app.get("/api/health")
@@ -156,9 +158,6 @@ async def chat_endpoint(req: ChatRequest):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-if os.path.exists(static_dir):
-    app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 try:
     from a2wsgi import ASGIMiddleware
