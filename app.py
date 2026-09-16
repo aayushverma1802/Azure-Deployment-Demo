@@ -8,7 +8,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Any
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
-from agent import travel_agent
 
 app = FastAPI(title="Agentic Travel Planner")
 
@@ -19,6 +18,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+_agent = None
+
+def get_agent():
+    global _agent
+    if _agent is None:
+        from agent import travel_agent
+        _agent = travel_agent
+    return _agent
 
 class ChatRequest(BaseModel):
     message: str
@@ -46,11 +54,12 @@ async def chat_stream_endpoint(req: ChatRequest):
     thread_id = req.thread_id or str(uuid.uuid4())
     config = {"configurable": {"thread_id": thread_id}}
     inputs = {"messages": [HumanMessage(content=req.message)]}
+    agent_instance = get_agent()
 
     async def event_generator():
         yield f"data: {json.dumps({'type': 'init', 'thread_id': thread_id})}\n\n"
         try:
-            async for event in travel_agent.astream_events(inputs, config=config, version="v2"):
+            async for event in agent_instance.astream_events(inputs, config=config, version="v2"):
                 kind = event.get("event")
                 if kind == "on_chat_model_stream":
                     chunk = event["data"]["chunk"]
@@ -85,10 +94,11 @@ async def chat_endpoint(req: ChatRequest):
     
     thread_id = req.thread_id or str(uuid.uuid4())
     config = {"configurable": {"thread_id": thread_id}}
+    agent_instance = get_agent()
 
     try:
         inputs = {"messages": [HumanMessage(content=req.message)]}
-        result = await travel_agent.ainvoke(inputs, config=config)
+        result = await agent_instance.ainvoke(inputs, config=config)
 
         messages = result.get("messages", [])
         final_answer = ""

@@ -1,5 +1,9 @@
-bind = "0.0.0.0:8000"
-workers = 2
+import os
+
+port = os.environ.get("PORT", "8000")
+bind = f"0.0.0.0:{port}"
+workers = 1
 worker_class = "uvicorn.workers.UvicornWorker"
-timeout = 600
-wsgi_app = "app:app"
+timeout = 300
+accesslog = "-"
+errorlog = "-"
